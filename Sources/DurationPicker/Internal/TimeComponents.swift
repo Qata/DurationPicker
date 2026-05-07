@@ -57,15 +57,20 @@ struct TimeComponents: Equatable {
   /// Creates a ``TimeComponents`` instance with the provided hour, minute, and second components.
   ///
   /// - Parameters:
-  ///   - uncheckedHour: The hour component. must be within 0 and 23.
+  ///   - uncheckedHour: The hour component. Must be within `0` and
+  ///     `numberOfHours`.
   ///   - uncheckedMinute: The minute component, must be within 0 and 59.
   ///   - uncheckedSecond: The second component, must be within 0 and 59.
+  ///   - numberOfHours: The upper bound of the hour wheel. Defaults to
+  ///     ``NumberOfHours`` (24); pass the picker's configured value when
+  ///     constructing components for a picker with a custom upper bound.
   init(uncheckedHour: Int = 0,
        uncheckedMinute: Int = 0,
-       uncheckedSecond: Int = 0) {
+       uncheckedSecond: Int = 0,
+       numberOfHours: Int = NumberOfHours) {
     precondition(
-      (0..<NumberOfHours).contains(uncheckedHour),
-      "Hour not in the range [0, \(NumberOfHours)]")
+      (0..<numberOfHours).contains(uncheckedHour),
+      "Hour not in the range [0, \(numberOfHours))")
     precondition(
       (0..<NumberOfMinutes).contains(uncheckedMinute),
       "Minute not in the range [0, \(NumberOfMinutes)]")
@@ -97,20 +102,23 @@ struct TimeComponents: Equatable {
                          roundingMode: RoundingMode = .down,
                          hourInterval: Int = 1,
                          minuteInterval: Int = 1,
-                         secondInterval: Int = 1) -> TimeComponents {
+                         secondInterval: Int = 1,
+                         numberOfHours: Int = NumberOfHours) -> TimeComponents {
     let roundedMinimumDuration = TimeUtils.roundedDuration(
       minimumDuration ?? 0,
       forPickerMode: pickerMode,
       roundingRule: .up,
       hourInterval: hourInterval,
       minuteInterval: minuteInterval,
-      secondInterval: secondInterval)
+      secondInterval: secondInterval,
+      numberOfHours: numberOfHours)
 
     let absoluteMaximumDuration = TimeUtils.absoluteMaximumDuration(
       forPickerMode: pickerMode,
       hourInterval: hourInterval,
       minuteInterval: minuteInterval,
-      secondInterval: secondInterval)
+      secondInterval: secondInterval,
+      numberOfHours: numberOfHours)
 
     let roundedMaximumDuration = TimeUtils.roundedDuration(
       maximumDuration ?? absoluteMaximumDuration,
@@ -118,7 +126,8 @@ struct TimeComponents: Equatable {
       roundingRule: .down,
       hourInterval: hourInterval,
       minuteInterval: minuteInterval,
-      secondInterval: secondInterval)
+      secondInterval: secondInterval,
+      numberOfHours: numberOfHours)
 
     let isMinMaxOrderValid = roundedMinimumDuration <= roundedMaximumDuration
 
@@ -129,23 +138,28 @@ struct TimeComponents: Equatable {
       maximumDuration: isMinMaxOrderValid ? roundedMaximumDuration : absoluteMaximumDuration,
       hourInterval: hourInterval,
       minuteInterval: minuteInterval,
-      secondInterval: secondInterval)
+      secondInterval: secondInterval,
+      numberOfHours: numberOfHours)
     : roundedUpComponents(
       fromDuration: duration,
       minimumDuration: isMinMaxOrderValid ? roundedMinimumDuration : 0,
       maximumDuration: isMinMaxOrderValid ? roundedMaximumDuration : absoluteMaximumDuration,
       hourInterval: hourInterval,
       minuteInterval: minuteInterval,
-      secondInterval: secondInterval)
+      secondInterval: secondInterval,
+      numberOfHours: numberOfHours)
 
     // Zero out specific components based on the picker mode
     switch pickerMode {
     case .hour:
-      return TimeComponents(uncheckedHour: roundedComponents.hour)
+      return TimeComponents(
+        uncheckedHour: roundedComponents.hour,
+        numberOfHours: numberOfHours)
     case .hourMinute:
       return TimeComponents(
         uncheckedHour: roundedComponents.hour,
-        uncheckedMinute: roundedComponents.minute)
+        uncheckedMinute: roundedComponents.minute,
+        numberOfHours: numberOfHours)
     case .hourMinuteSecond:
       return roundedComponents
     case .minute:
@@ -164,7 +178,8 @@ struct TimeComponents: Equatable {
                                             maximumDuration: Int,
                                             hourInterval: Int,
                                             minuteInterval: Int,
-                                            secondInterval: Int) -> TimeComponents {
+                                            secondInterval: Int,
+                                            numberOfHours: Int = NumberOfHours) -> TimeComponents {
     let clampedDuration = duration.clamped(to: minimumDuration...maximumDuration)
 
     let hour = clampedDuration.quotientAndRemainder(dividingBy: hourInterval * OneHour)
@@ -178,7 +193,8 @@ struct TimeComponents: Equatable {
     return TimeComponents(
       uncheckedHour: hour.quotient * hourInterval,
       uncheckedMinute: minute.quotient * minuteInterval,
-      uncheckedSecond: second.quotient * secondInterval)
+      uncheckedSecond: second.quotient * secondInterval,
+      numberOfHours: numberOfHours)
   }
 
   private static func roundedUpComponents(fromDuration duration: Int,
@@ -186,7 +202,8 @@ struct TimeComponents: Equatable {
                                           maximumDuration: Int,
                                           hourInterval: Int,
                                           minuteInterval: Int,
-                                          secondInterval: Int) -> TimeComponents {
+                                          secondInterval: Int,
+                                          numberOfHours: Int = NumberOfHours) -> TimeComponents {
     let clampedDuration = duration.clamped(to: minimumDuration...maximumDuration)
 
     // There are some special cases where we actually round _down_
@@ -199,15 +216,16 @@ struct TimeComponents: Equatable {
         maximumDuration: maximumDuration,
         hourInterval: hourInterval,
         minuteInterval: minuteInterval,
-        secondInterval: secondInterval)
+        secondInterval: secondInterval,
+        numberOfHours: numberOfHours)
     }
 
     let hour = clampedDuration.quotientAndRemainder(dividingBy: hourInterval * OneHour)
     // If we cannot fit the hour remainder into the minute and second components, make space in the hour component
     let additionalHourInterval = hour.remainder <= OneHour - minuteInterval * NumberOfSeconds ? 0 : hourInterval
     let hourRemainder = max(hour.remainder - additionalHourInterval * OneHour, 0)
-    let numberOfHours = min(
-      NumberOfHours - hourInterval,
+    let computedHours = min(
+      numberOfHours - hourInterval,
       hour.quotient * hourInterval + additionalHourInterval)
 
     let minute = hourRemainder.quotientAndRemainder(dividingBy: minuteInterval * NumberOfSeconds)
@@ -225,8 +243,9 @@ struct TimeComponents: Equatable {
       second.quotient * secondInterval + additionalSecondInterval)
 
     return TimeComponents(
-      uncheckedHour: numberOfHours,
+      uncheckedHour: computedHours,
       uncheckedMinute: numberOfMinutes,
-      uncheckedSecond: numberOfSeconds)
+      uncheckedSecond: numberOfSeconds,
+      numberOfHours: numberOfHours)
   }
 }

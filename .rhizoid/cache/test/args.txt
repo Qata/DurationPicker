@@ -1,0 +1,2 @@
+__env=SAFEHOUSE_ACTIVE
+test

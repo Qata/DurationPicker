@@ -53,11 +53,13 @@ enum TimeUtils {
   static func absoluteMaximumDuration(forPickerMode pickerMode: DurationPicker.Mode,
                                       hourInterval: Int = 1,
                                       minuteInterval: Int = 1,
-                                      secondInterval: Int = 1) -> Int {
+                                      secondInterval: Int = 1,
+                                      numberOfHours: Int = NumberOfHours) -> Int {
     seconds(
       fromHours: maximumNumberOfHours(
         forPickerMode: pickerMode,
-        hourInterval: hourInterval),
+        hourInterval: hourInterval,
+        numberOfHours: numberOfHours),
       minutes: maximumNumberOfMinutes(
         forPickerMode: pickerMode,
         minuteInterval: minuteInterval),
@@ -82,12 +84,14 @@ enum TimeUtils {
                               roundingRule: FloatingPointRoundingRule,
                               hourInterval: Int = 1,
                               minuteInterval: Int = 1,
-                              secondInterval: Int = 1) -> Int {
+                              secondInterval: Int = 1,
+                              numberOfHours: Int = NumberOfHours) -> Int {
     let absoluteMaximumDuration = absoluteMaximumDuration(
       forPickerMode: pickerMode,
       hourInterval: hourInterval,
       minuteInterval: minuteInterval,
-      secondInterval: secondInterval)
+      secondInterval: secondInterval,
+      numberOfHours: numberOfHours)
 
     switch pickerMode {
     case .hour:
@@ -119,12 +123,13 @@ enum TimeUtils {
   ///
   /// - Returns: The maximum number of hours that can be displayed.
   static func maximumNumberOfHours(forPickerMode pickerMode: DurationPicker.Mode,
-                                   hourInterval: Int) -> Int {
+                                   hourInterval: Int,
+                                   numberOfHours: Int = NumberOfHours) -> Int {
     switch pickerMode {
     case .hour,
         .hourMinute,
         .hourMinuteSecond:
-      NumberOfHours - hourInterval
+      numberOfHours - hourInterval
     default: 0
     }
   }

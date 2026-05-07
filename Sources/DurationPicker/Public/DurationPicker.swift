@@ -156,10 +156,26 @@ open class DurationPicker: UIControl {
 
   /// The interval at which the duration picker should display hours.
   ///
-  /// Use this property to set the interval displayed by the hours wheel (for example, 4 hours). The interval value must be evenly divided into 24; if it isn’t, the default value is used. The default and minimum values are 1; the maximum value is 12.
+  /// Use this property to set the interval displayed by the hours wheel (for example, 4 hours). The interval value must evenly divide ``numberOfHours``; if it isn’t, the default value is used. The default and minimum values are 1; the maximum value is ``numberOfHours`` / 2.
   public var hourInterval: Int {
     get { pickerView.hourInterval }
     set { pickerView.hourInterval = newValue }
+  }
+
+  /// The upper bound of the hour wheel.
+  ///
+  /// Defaults to 24, matching `UIDatePicker.countDownTimer`. Set higher
+  /// to allow durations longer than a day — for example,
+  /// `numberOfHours = 168` lets the user pick up to 1 week minus
+  /// `hourInterval`. The minimum is 1; non-positive values are clamped
+  /// to 1.
+  ///
+  /// Setting this property reloads the wheel and clamps the current
+  /// ``duration`` to the new maximum if necessary. ``hourInterval`` must
+  /// evenly divide the new value or it falls back to 1.
+  public var numberOfHours: Int {
+    get { pickerView.numberOfHours }
+    set { pickerView.numberOfHours = newValue }
   }
 
   /// The value displayed by the duration picker.

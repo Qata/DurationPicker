@@ -96,6 +96,24 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
 
   private var internalHourInterval: Int = 1
 
+  /// Configurable upper bound on the hour wheel. Defaults to 24 (matches
+  /// the historical UIDatePicker.countDownTimer cap). Setting this >24
+  /// lets the picker represent durations longer than a day; the wheel
+  /// renders rows 0..<numberOfHours.
+  var numberOfHours: Int {
+    get { internalNumberOfHours }
+    set {
+      let clamped = max(1, newValue)
+      guard internalNumberOfHours != clamped else { return }
+      internalNumberOfHours = clamped
+      // Maximum allowed components depend on numberOfHours; rebuild and
+      // reload so the wheel + clamping reflect the new ceiling.
+      refreshDurationRange()
+    }
+  }
+
+  private var internalNumberOfHours: Int = NumberOfHours
+
   // MARK: - Layout Properties
 
   private let hourUnitLabel = makeUnitLabel()
@@ -253,7 +271,8 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
       maximumDuration: maximumDurationComponents.duration,
       hourInterval: hourInterval,
       minuteInterval: minuteInterval,
-      secondInterval: secondInterval)
+      secondInterval: secondInterval,
+      numberOfHours: internalNumberOfHours)
 
     // Set unit label text in case the text may have changed, e.g. "hour" to "hours"
     setUnitLabelsText()
@@ -302,7 +321,8 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
         forPickerMode: pickerMode,
         hourInterval: hourInterval,
         minuteInterval: minuteInterval,
-        secondInterval: secondInterval)
+        secondInterval: secondInterval,
+        numberOfHours: internalNumberOfHours)
       let isValidRange = maximum >= 0
       && minimum <= absoluteMaximum
       && minimum <= maximum
@@ -346,7 +366,8 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
       forPickerMode: pickerMode,
       hourInterval: hourInterval,
       minuteInterval: minuteInterval,
-      secondInterval: secondInterval)
+      secondInterval: secondInterval,
+      numberOfHours: internalNumberOfHours)
 
     guard minimum <= absoluteMaximum else {
       return makeAbsoluteMinimumDurationComponents()
@@ -358,20 +379,23 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
       roundingMode: .up,
       hourInterval: hourInterval,
       minuteInterval: minuteInterval,
-      secondInterval: secondInterval)
+      secondInterval: secondInterval,
+      numberOfHours: internalNumberOfHours)
   }
 
   private func makeAbsoluteMaximumDurationComponents() -> TimeComponents {
     TimeComponents(
       uncheckedHour: TimeUtils.maximumNumberOfHours(
         forPickerMode: pickerMode,
-        hourInterval: hourInterval),
+        hourInterval: hourInterval,
+        numberOfHours: internalNumberOfHours),
       uncheckedMinute: TimeUtils.maximumNumberOfMinutes(
         forPickerMode: pickerMode,
         minuteInterval: minuteInterval),
       uncheckedSecond: TimeUtils.maximumNumberOfSeconds(
         forPickerMode: pickerMode,
-        secondInterval: secondInterval))
+        secondInterval: secondInterval),
+      numberOfHours: internalNumberOfHours)
   }
 
   private func makeMaximumDurationComponents(fromMaximum maximum: Int) -> TimeComponents {
@@ -383,7 +407,8 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
       pickerMode: pickerMode,
       hourInterval: hourInterval,
       minuteInterval: minuteInterval,
-      secondInterval: secondInterval)
+      secondInterval: secondInterval,
+      numberOfHours: internalNumberOfHours)
   }
 
   // MARK: - Picker Mode
@@ -437,8 +462,8 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
                            forComponentType componentType: DurationPickerComponentType) {
     switch componentType {
     case .hour:
-      if (1...NumberOfHours / 2).contains(interval)
-          && NumberOfHours.isMultiple(of: interval) {
+      if (1...internalNumberOfHours / 2).contains(interval)
+          && internalNumberOfHours.isMultiple(of: interval) {
         internalHourInterval = interval
       } else {
         internalHourInterval = 1
@@ -712,7 +737,7 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
     }
     switch componentType {
     case .hour:
-      return NumberOfHours / hourInterval
+      return internalNumberOfHours / hourInterval
     case .minute:
       return NumberOfMinutes / minuteInterval
     case .second:

@@ -1,0 +1,366 @@
+diff --git a/Sources/DurationPicker/Internal/DurationPickerView.swift b/Sources/DurationPicker/Internal/DurationPickerView.swift
+index 5e16f8b..7a802b0 100644
+--- a/Sources/DurationPicker/Internal/DurationPickerView.swift
++++ b/Sources/DurationPicker/Internal/DurationPickerView.swift
+@@ -96,6 +96,24 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
+ 
+   private var internalHourInterval: Int = 1
+ 
++  /// Configurable upper bound on the hour wheel. Defaults to 24 (matches
++  /// the historical UIDatePicker.countDownTimer cap). Setting this >24
++  /// lets the picker represent durations longer than a day; the wheel
++  /// renders rows 0..<numberOfHours.
++  var numberOfHours: Int {
++    get { internalNumberOfHours }
++    set {
++      let clamped = max(1, newValue)
++      guard internalNumberOfHours != clamped else { return }
++      internalNumberOfHours = clamped
++      // Maximum allowed components depend on numberOfHours; rebuild and
++      // reload so the wheel + clamping reflect the new ceiling.
++      refreshDurationRange()
++    }
++  }
++
++  private var internalNumberOfHours: Int = NumberOfHours
++
+   // MARK: - Layout Properties
+ 
+   private let hourUnitLabel = makeUnitLabel()
+@@ -253,7 +271,8 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
+       maximumDuration: maximumDurationComponents.duration,
+       hourInterval: hourInterval,
+       minuteInterval: minuteInterval,
+-      secondInterval: secondInterval)
++      secondInterval: secondInterval,
++      numberOfHours: internalNumberOfHours)
+ 
+     // Set unit label text in case the text may have changed, e.g. "hour" to "hours"
+     setUnitLabelsText()
+@@ -302,7 +321,8 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
+         forPickerMode: pickerMode,
+         hourInterval: hourInterval,
+         minuteInterval: minuteInterval,
+-        secondInterval: secondInterval)
++        secondInterval: secondInterval,
++        numberOfHours: internalNumberOfHours)
+       let isValidRange = maximum >= 0
+       && minimum <= absoluteMaximum
+       && minimum <= maximum
+@@ -346,7 +366,8 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
+       forPickerMode: pickerMode,
+       hourInterval: hourInterval,
+       minuteInterval: minuteInterval,
+-      secondInterval: secondInterval)
++      secondInterval: secondInterval,
++      numberOfHours: internalNumberOfHours)
+ 
+     guard minimum <= absoluteMaximum else {
+       return makeAbsoluteMinimumDurationComponents()
+@@ -358,20 +379,23 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
+       roundingMode: .up,
+       hourInterval: hourInterval,
+       minuteInterval: minuteInterval,
+-      secondInterval: secondInterval)
++      secondInterval: secondInterval,
++      numberOfHours: internalNumberOfHours)
+   }
+ 
+   private func makeAbsoluteMaximumDurationComponents() -> TimeComponents {
+     TimeComponents(
+       uncheckedHour: TimeUtils.maximumNumberOfHours(
+         forPickerMode: pickerMode,
+-        hourInterval: hourInterval),
++        hourInterval: hourInterval,
++        numberOfHours: internalNumberOfHours),
+       uncheckedMinute: TimeUtils.maximumNumberOfMinutes(
+         forPickerMode: pickerMode,
+         minuteInterval: minuteInterval),
+       uncheckedSecond: TimeUtils.maximumNumberOfSeconds(
+         forPickerMode: pickerMode,
+-        secondInterval: secondInterval))
++        secondInterval: secondInterval),
++      numberOfHours: internalNumberOfHours)
+   }
+ 
+   private func makeMaximumDurationComponents(fromMaximum maximum: Int) -> TimeComponents {
+@@ -383,7 +407,8 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
+       pickerMode: pickerMode,
+       hourInterval: hourInterval,
+       minuteInterval: minuteInterval,
+-      secondInterval: secondInterval)
++      secondInterval: secondInterval,
++      numberOfHours: internalNumberOfHours)
+   }
+ 
+   // MARK: - Picker Mode
+@@ -437,8 +462,8 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
+                            forComponentType componentType: DurationPickerComponentType) {
+     switch componentType {
+     case .hour:
+-      if (1...NumberOfHours / 2).contains(interval)
+-          && NumberOfHours.isMultiple(of: interval) {
++      if (1...internalNumberOfHours / 2).contains(interval)
++          && internalNumberOfHours.isMultiple(of: interval) {
+         internalHourInterval = interval
+       } else {
+         internalHourInterval = 1
+@@ -712,7 +737,7 @@ final class DurationPickerView: UIPickerView, UIPickerViewDataSource, UIPickerVi
+     }
+     switch componentType {
+     case .hour:
+-      return NumberOfHours / hourInterval
++      return internalNumberOfHours / hourInterval
+     case .minute:
+       return NumberOfMinutes / minuteInterval
+     case .second:
+diff --git a/Sources/DurationPicker/Internal/TimeComponents.swift b/Sources/DurationPicker/Internal/TimeComponents.swift
+index 1dad17b..09650fe 100644
+--- a/Sources/DurationPicker/Internal/TimeComponents.swift
++++ b/Sources/DurationPicker/Internal/TimeComponents.swift
+@@ -57,15 +57,20 @@ struct TimeComponents: Equatable {
+   /// Creates a ``TimeComponents`` instance with the provided hour, minute, and second components.
+   ///
+   /// - Parameters:
+-  ///   - uncheckedHour: The hour component. must be within 0 and 23.
++  ///   - uncheckedHour: The hour component. Must be within `0` and
++  ///     `numberOfHours`.
+   ///   - uncheckedMinute: The minute component, must be within 0 and 59.
+   ///   - uncheckedSecond: The second component, must be within 0 and 59.
++  ///   - numberOfHours: The upper bound of the hour wheel. Defaults to
++  ///     ``NumberOfHours`` (24); pass the picker's configured value when
++  ///     constructing components for a picker with a custom upper bound.
+   init(uncheckedHour: Int = 0,
+        uncheckedMinute: Int = 0,
+-       uncheckedSecond: Int = 0) {
++       uncheckedSecond: Int = 0,
++       numberOfHours: Int = NumberOfHours) {
+     precondition(
+-      (0..<NumberOfHours).contains(uncheckedHour),
+-      "Hour not in the range [0, \(NumberOfHours)]")
++      (0..<numberOfHours).contains(uncheckedHour),
++      "Hour not in the range [0, \(numberOfHours))")
+     precondition(
+       (0..<NumberOfMinutes).contains(uncheckedMinute),
+       "Minute not in the range [0, \(NumberOfMinutes)]")
+@@ -97,20 +102,23 @@ struct TimeComponents: Equatable {
+                          roundingMode: RoundingMode = .down,
+                          hourInterval: Int = 1,
+                          minuteInterval: Int = 1,
+-                         secondInterval: Int = 1) -> TimeComponents {
++                         secondInterval: Int = 1,
++                         numberOfHours: Int = NumberOfHours) -> TimeComponents {
+     let roundedMinimumDuration = TimeUtils.roundedDuration(
+       minimumDuration ?? 0,
+       forPickerMode: pickerMode,
+       roundingRule: .up,
+       hourInterval: hourInterval,
+       minuteInterval: minuteInterval,
+-      secondInterval: secondInterval)
++      secondInterval: secondInterval,
++      numberOfHours: numberOfHours)
+ 
+     let absoluteMaximumDuration = TimeUtils.absoluteMaximumDuration(
+       forPickerMode: pickerMode,
+       hourInterval: hourInterval,
+       minuteInterval: minuteInterval,
+-      secondInterval: secondInterval)
++      secondInterval: secondInterval,
++      numberOfHours: numberOfHours)
+ 
+     let roundedMaximumDuration = TimeUtils.roundedDuration(
+       maximumDuration ?? absoluteMaximumDuration,
+@@ -118,7 +126,8 @@ struct TimeComponents: Equatable {
+       roundingRule: .down,
+       hourInterval: hourInterval,
+       minuteInterval: minuteInterval,
+-      secondInterval: secondInterval)
++      secondInterval: secondInterval,
++      numberOfHours: numberOfHours)
+ 
+     let isMinMaxOrderValid = roundedMinimumDuration <= roundedMaximumDuration
+ 
+@@ -129,23 +138,28 @@ struct TimeComponents: Equatable {
+       maximumDuration: isMinMaxOrderValid ? roundedMaximumDuration : absoluteMaximumDuration,
+       hourInterval: hourInterval,
+       minuteInterval: minuteInterval,
+-      secondInterval: secondInterval)
++      secondInterval: secondInterval,
++      numberOfHours: numberOfHours)
+     : roundedUpComponents(
+       fromDuration: duration,
+       minimumDuration: isMinMaxOrderValid ? roundedMinimumDuration : 0,
+       maximumDuration: isMinMaxOrderValid ? roundedMaximumDuration : absoluteMaximumDuration,
+       hourInterval: hourInterval,
+       minuteInterval: minuteInterval,
+-      secondInterval: secondInterval)
++      secondInterval: secondInterval,
++      numberOfHours: numberOfHours)
+ 
+     // Zero out specific components based on the picker mode
+     switch pickerMode {
+     case .hour:
+-      return TimeComponents(uncheckedHour: roundedComponents.hour)
++      return TimeComponents(
++        uncheckedHour: roundedComponents.hour,
++        numberOfHours: numberOfHours)
+     case .hourMinute:
+       return TimeComponents(
+         uncheckedHour: roundedComponents.hour,
+-        uncheckedMinute: roundedComponents.minute)
++        uncheckedMinute: roundedComponents.minute,
++        numberOfHours: numberOfHours)
+     case .hourMinuteSecond:
+       return roundedComponents
+     case .minute:
+@@ -164,7 +178,8 @@ struct TimeComponents: Equatable {
+                                             maximumDuration: Int,
+                                             hourInterval: Int,
+                                             minuteInterval: Int,
+-                                            secondInterval: Int) -> TimeComponents {
++                                            secondInterval: Int,
++                                            numberOfHours: Int = NumberOfHours) -> TimeComponents {
+     let clampedDuration = duration.clamped(to: minimumDuration...maximumDuration)
+ 
+     let hour = clampedDuration.quotientAndRemainder(dividingBy: hourInterval * OneHour)
+@@ -178,7 +193,8 @@ struct TimeComponents: Equatable {
+     return TimeComponents(
+       uncheckedHour: hour.quotient * hourInterval,
+       uncheckedMinute: minute.quotient * minuteInterval,
+-      uncheckedSecond: second.quotient * secondInterval)
++      uncheckedSecond: second.quotient * secondInterval,
++      numberOfHours: numberOfHours)
+   }
+ 
+   private static func roundedUpComponents(fromDuration duration: Int,
+@@ -186,7 +202,8 @@ struct TimeComponents: Equatable {
+                                           maximumDuration: Int,
+                                           hourInterval: Int,
+                                           minuteInterval: Int,
+-                                          secondInterval: Int) -> TimeComponents {
++                                          secondInterval: Int,
++                                          numberOfHours: Int = NumberOfHours) -> TimeComponents {
+     let clampedDuration = duration.clamped(to: minimumDuration...maximumDuration)
+ 
+     // There are some special cases where we actually round _down_
+@@ -199,15 +216,16 @@ struct TimeComponents: Equatable {
+         maximumDuration: maximumDuration,
+         hourInterval: hourInterval,
+         minuteInterval: minuteInterval,
+-        secondInterval: secondInterval)
++        secondInterval: secondInterval,
++        numberOfHours: numberOfHours)
+     }
+ 
+     let hour = clampedDuration.quotientAndRemainder(dividingBy: hourInterval * OneHour)
+     // If we cannot fit the hour remainder into the minute and second components, make space in the hour component
+     let additionalHourInterval = hour.remainder <= OneHour - minuteInterval * NumberOfSeconds ? 0 : hourInterval
+     let hourRemainder = max(hour.remainder - additionalHourInterval * OneHour, 0)
+-    let numberOfHours = min(
+-      NumberOfHours - hourInterval,
++    let computedHours = min(
++      numberOfHours - hourInterval,
+       hour.quotient * hourInterval + additionalHourInterval)
+ 
+     let minute = hourRemainder.quotientAndRemainder(dividingBy: minuteInterval * NumberOfSeconds)
+@@ -225,8 +243,9 @@ struct TimeComponents: Equatable {
+       second.quotient * secondInterval + additionalSecondInterval)
+ 
+     return TimeComponents(
+-      uncheckedHour: numberOfHours,
++      uncheckedHour: computedHours,
+       uncheckedMinute: numberOfMinutes,
+-      uncheckedSecond: numberOfSeconds)
++      uncheckedSecond: numberOfSeconds,
++      numberOfHours: numberOfHours)
+   }
+ }
+diff --git a/Sources/DurationPicker/Internal/Utilities/TimeUtils.swift b/Sources/DurationPicker/Internal/Utilities/TimeUtils.swift
+index 3c80030..fd529f3 100644
+--- a/Sources/DurationPicker/Internal/Utilities/TimeUtils.swift
++++ b/Sources/DurationPicker/Internal/Utilities/TimeUtils.swift
+@@ -53,11 +53,13 @@ enum TimeUtils {
+   static func absoluteMaximumDuration(forPickerMode pickerMode: DurationPicker.Mode,
+                                       hourInterval: Int = 1,
+                                       minuteInterval: Int = 1,
+-                                      secondInterval: Int = 1) -> Int {
++                                      secondInterval: Int = 1,
++                                      numberOfHours: Int = NumberOfHours) -> Int {
+     seconds(
+       fromHours: maximumNumberOfHours(
+         forPickerMode: pickerMode,
+-        hourInterval: hourInterval),
++        hourInterval: hourInterval,
++        numberOfHours: numberOfHours),
+       minutes: maximumNumberOfMinutes(
+         forPickerMode: pickerMode,
+         minuteInterval: minuteInterval),
+@@ -82,12 +84,14 @@ enum TimeUtils {
+                               roundingRule: FloatingPointRoundingRule,
+                               hourInterval: Int = 1,
+                               minuteInterval: Int = 1,
+-                              secondInterval: Int = 1) -> Int {
++                              secondInterval: Int = 1,
++                              numberOfHours: Int = NumberOfHours) -> Int {
+     let absoluteMaximumDuration = absoluteMaximumDuration(
+       forPickerMode: pickerMode,
+       hourInterval: hourInterval,
+       minuteInterval: minuteInterval,
+-      secondInterval: secondInterval)
++      secondInterval: secondInterval,
++      numberOfHours: numberOfHours)
+ 
+     switch pickerMode {
+     case .hour:
+@@ -119,12 +123,13 @@ enum TimeUtils {
+   ///
+   /// - Returns: The maximum number of hours that can be displayed.
+   static func maximumNumberOfHours(forPickerMode pickerMode: DurationPicker.Mode,
+-                                   hourInterval: Int) -> Int {
++                                   hourInterval: Int,
++                                   numberOfHours: Int = NumberOfHours) -> Int {
+     switch pickerMode {
+     case .hour,
+         .hourMinute,
+         .hourMinuteSecond:
+-      NumberOfHours - hourInterval
++      numberOfHours - hourInterval
+     default: 0
+     }
+   }
+diff --git a/Sources/DurationPicker/Public/DurationPicker.swift b/Sources/DurationPicker/Public/DurationPicker.swift
+index 73feb06..b4eb397 100644
+--- a/Sources/DurationPicker/Public/DurationPicker.swift
++++ b/Sources/DurationPicker/Public/DurationPicker.swift
+@@ -156,12 +156,28 @@ open class DurationPicker: UIControl {
+ 
+   /// The interval at which the duration picker should display hours.
+   ///
+-  /// Use this property to set the interval displayed by the hours wheel (for example, 4 hours). The interval value must be evenly divided into 24; if it isn’t, the default value is used. The default and minimum values are 1; the maximum value is 12.
++  /// Use this property to set the interval displayed by the hours wheel (for example, 4 hours). The interval value must evenly divide ``numberOfHours``; if it isn’t, the default value is used. The default and minimum values are 1; the maximum value is ``numberOfHours`` / 2.
+   public var hourInterval: Int {
+     get { pickerView.hourInterval }
+     set { pickerView.hourInterval = newValue }
+   }
+ 
++  /// The upper bound of the hour wheel.
++  ///
++  /// Defaults to 24, matching `UIDatePicker.countDownTimer`. Set higher
++  /// to allow durations longer than a day — for example,
++  /// `numberOfHours = 168` lets the user pick up to 1 week minus
++  /// `hourInterval`. The minimum is 1; non-positive values are clamped
++  /// to 1.
++  ///
++  /// Setting this property reloads the wheel and clamps the current
++  /// ``duration`` to the new maximum if necessary. ``hourInterval`` must
++  /// evenly divide the new value or it falls back to 1.
++  public var numberOfHours: Int {
++    get { pickerView.numberOfHours }
++    set { pickerView.numberOfHours = newValue }
++  }
++
+   /// The value displayed by the duration picker.
+   ///
+   /// Use this property to get and set the currently selected value. This property is of type `TimeInterval` and therefore is measured in seconds. The default value is 0.0 and the maximum value is 23:59:59 (86,399 seconds).
+
+---staged---

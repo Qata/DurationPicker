@@ -1,0 +1,11 @@
+Testing Swift package: DurationPicker
+bash -c /usr/bin/swift test --disable-sandbox 2>&1
+event{type,detail}: warning,"'durationpicker': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target"
+event{type,detail}: error,"/Users/ch/Develop/DurationPicker/Sources/DurationPicker/Internal/DurationPickerContentView.swift:23: no such module 'UIKit'"
+event{type,detail}: error,"emit-module command failed with exit code 1 (use -v to see invocation)"
+event{type,detail}: error,"fatalError"
+---
+status: failed
+summary:
+  errors: 3
+  warnings: 1
